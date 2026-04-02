@@ -1,33 +1,67 @@
-# 🎵 Music Recommender Simulation
+# Music Recommender Simulation
 
 ## Project Summary
 
-In this project you will build and explain a small music recommender system.
-
-Your goal is to:
-
-- Represent songs and a user "taste profile" as data
-- Design a scoring rule that turns that data into recommendations
-- Evaluate what your system gets right and wrong
-- Reflect on how this mirrors real world AI recommenders
-
-Replace this paragraph with your own summary of what your version does.
+This project simulates how a content-based music recommender works — the same
+underlying idea used by Spotify's "Radio" and YouTube's "Up Next." A user
+provides a taste profile (preferred genre, mood, and energy level) and the
+system scores every song in the catalog against those preferences, then returns
+the top-K matches with plain-English explanations.
 
 ---
 
 ## How The System Works
 
-Explain your design in plain language.
+### Real-world inspiration
 
-Some prompts to answer:
+Platforms like Spotify combine two main techniques. **Collaborative filtering**
+says "people who liked what you liked also loved this" — it uses crowd behavior
+rather than song attributes. **Content-based filtering** says "this song sounds
+like what you enjoy" — it compares measurable song features (tempo, energy,
+mood) directly to your stated preferences. This simulation implements the
+content-based approach, which is simpler to reason about and easier to explain.
 
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
+### Features used
 
-You can include a simple diagram or bullet list if helpful.
+Each `Song` carries: `genre`, `mood`, `energy` (0–1), `tempo_bpm`, `valence`,
+`danceability`, and `acousticness` (0–1).
+
+A `UserProfile` stores: `favorite_genre`, `favorite_mood`, `target_energy`,
+and `likes_acoustic` (bool).
+
+### Algorithm Recipe (scoring a single song)
+
+| Rule | Points |
+|------|--------|
+| Genre matches user's favorite | +2.0 |
+| Mood matches user's favorite | +1.0 |
+| Energy proximity `1.0 – |song_energy – target_energy|` | 0.0 – 1.0 |
+| Acousticness bonus (if `likes_acoustic`) `acousticness × 0.5` | 0.0 – 0.5 |
+
+Genre is weighted highest because it is the broadest filter — a pop fan and a
+metal fan rarely share the same "vibe" regardless of energy.
+
+### Ranking rule
+
+After every song is scored, the catalog is sorted from highest to lowest score
+and the top-K entries are returned. `sorted()` is used (over `.sort()`) so the
+original song list is never mutated.
+
+### Data flow
+
+```
+Input (UserProfile)
+    │
+    ▼
+For every Song in songs.csv
+    │  score_song(user_prefs, song) → (numeric score, reasons string)
+    │
+    ▼
+Sort all (song, score, reasons) by score descending
+    │
+    ▼
+Output: Top-K recommendations with explanations
+```
 
 ---
 
@@ -35,177 +69,124 @@ You can include a simple diagram or bullet list if helpful.
 
 ### Setup
 
-1. Create a virtual environment (optional but recommended):
-
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate      # Mac or Linux
-   .venv\Scripts\activate         # Windows
-
-2. Install dependencies
-
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate   # Mac / Linux
 pip install -r requirements.txt
 ```
 
-3. Run the app:
+### Run
 
 ```bash
-python -m src.main
+python3 -m src.main
 ```
 
-### Running Tests
-
-Run the starter tests with:
+### Tests
 
 ```bash
 pytest
 ```
 
-You can add more tests in `tests/test_recommender.py`.
-
 ---
 
 ## Experiments You Tried
 
-Use this section to document the experiments you ran. For example:
+### Experiment 1 – Energy-gap dominance
 
-- What happened when you changed the weight on genre from 2.0 to 0.5
-- What happened when you added tempo or valence to the score
-- How did your system behave for different types of users
+Profile: High-Energy Pop (energy=0.85). "Gym Hero" (pop/intense, energy=0.93)
+scored 2.92 even without a mood match, while "Block Party Anthem" (hip-hop/happy,
+energy=0.80) scored 1.95 without a genre match. This shows that when genre
+matches but mood doesn't, energy proximity alone keeps the score competitive.
+
+### Experiment 2 – Weight shift (doubled energy, halved genre)
+
+Temporarily set genre weight to 1.0 and energy proximity weight to ×2. The
+Chill Lofi profile then surfaced "Acoustic Confession" (folk/sad) near the top
+because its energy (0.25) is very close to the target (0.38), even though it is
+neither lofi nor chill. This confirmed that genre weight of 2.0 is important for
+meaningful genre-level filtering.
+
+### Experiment 3 – Adversarial profile (conflicting energy + mood)
+
+Profile: `energy=0.9, mood=chill`. The system returned high-energy songs at the
+top (because energy proximity dominated) but none of them were truly "chill"
+— exposing the system's inability to understand that calm and high-energy are
+semantically contradictory.
 
 ---
 
 ## Limitations and Risks
 
-Summarize some limitations of your recommender.
-
-Examples:
-
-- It only works on a tiny catalog
-- It does not understand lyrics or language
-- It might over favor one genre or mood
-
-You will go deeper on this in your model card.
+- Catalog has only 24 songs, so "diverse" recommendations are quickly exhausted.
+- Genre weight can create a filter bubble: a pop user will rarely see jazz, even
+  if the mood and energy are identical.
+- The system treats every user as if their preferences are stable over time (no
+  listening history, no feedback loop).
+- Valence, danceability, and tempo_bpm are loaded but not used in scoring,
+  leaving information on the table.
 
 ---
 
 ## Reflection
 
-Read and complete `model_card.md`:
-
-[**Model Card**](model_card.md)
-
-Write 1 to 2 paragraphs here about what you learned:
-
-- about how recommenders turn data into predictions
-- about where bias or unfairness could show up in systems like this
-
+See [model_card.md](model_card.md) for the full model card and personal
+reflection.
 
 ---
 
-## 7. `model_card_template.md`
+## Terminal Output Screenshots
 
-Combines reflection and model card framing from the Module 3 guidance. :contentReference[oaicite:2]{index=2}  
+### High-Energy Pop
 
-```markdown
-# 🎧 Model Card - Music Recommender Simulation
+```
+Profile: High-Energy Pop  |  genre=pop, mood=happy, energy=0.85
+#1  Sunrise City by Neon Echo           Score: 3.97  — genre match; mood match; energy similarity +0.97
+#2  Gym Hero by Max Pulse               Score: 2.92  — genre match; energy similarity +0.92
+#3  Block Party Anthem by Kilo Verse    Score: 1.95  — mood match; energy similarity +0.95
+#4  Rooftop Lights by Indigo Parade     Score: 1.91  — mood match; energy similarity +0.91
+#5  Golden Hour Soul by Velvet James    Score: 1.83  — mood match; energy similarity +0.83
+```
 
-## 1. Model Name
+### Chill Lofi
 
-Give your recommender a name, for example:
+```
+Profile: Chill Lofi  |  genre=lofi, mood=chill, energy=0.38
+#1  Library Rain by Paper Lanterns      Score: 4.40  — genre; mood; energy +0.97; acoustic +0.43
+#2  Midnight Coding by LoRoom           Score: 4.31  — genre; mood; energy +0.96; acoustic +0.35
+#3  Focus Flow by LoRoom                Score: 3.37  — genre; energy +0.98; acoustic +0.39
+#4  Mountain Trail Song by Cedar Folk   Score: 2.39  — mood; energy +0.95; acoustic +0.44
+#5  Spacewalk Thoughts by Orbit Bloom   Score: 2.36  — mood; energy +0.90; acoustic +0.46
+```
 
-> VibeFinder 1.0
+### Deep Intense Rock
 
----
+```
+Profile: Deep Intense Rock  |  genre=rock, mood=intense, energy=0.92
+#1  Storm Runner by Voltline            Score: 3.99  — genre; mood; energy +0.99
+#2  Solar Flare by Voltline             Score: 3.96  — genre; mood; energy +0.96
+#3  Gym Hero by Max Pulse               Score: 1.99  — mood; energy +0.99
+#4  Drop It Low by Circuit Breaker      Score: 1.97  — mood; energy +0.97
+#5  Iron Sky by The Forge               Score: 1.96  — mood; energy +0.96
+```
 
-## 2. Intended Use
+### Rainy Jazz Mood
 
-- What is this system trying to do
-- Who is it for
+```
+Profile: Rainy Jazz Mood  |  genre=jazz, mood=moody, energy=0.32
+#1  Jazz in the Rain by Slow Stereo     Score: 4.40  — genre; mood; energy +0.99; acoustic +0.41
+#2  Coffee Shop Stories by Slow Stereo  Score: 3.40  — genre; energy +0.95; acoustic +0.45
+#3  Neon Carousel by Dreamwave          Score: 1.72  — mood; energy +0.62; acoustic +0.10
+#4  Night Drive Loop by Neon Echo       Score: 1.68  — mood; energy +0.57; acoustic +0.11
+#5  Mountain Trail Song by Cedar Folk   Score: 1.43  — energy +0.99; acoustic +0.44
+```
 
-Example:
+### Hip-Hop Focus
 
-> This model suggests 3 to 5 songs from a small catalog based on a user's preferred genre, mood, and energy level. It is for classroom exploration only, not for real users.
-
----
-
-## 3. How It Works (Short Explanation)
-
-Describe your scoring logic in plain language.
-
-- What features of each song does it consider
-- What information about the user does it use
-- How does it turn those into a number
-
-Try to avoid code in this section, treat it like an explanation to a non programmer.
-
----
-
-## 4. Data
-
-Describe your dataset.
-
-- How many songs are in `data/songs.csv`
-- Did you add or remove any songs
-- What kinds of genres or moods are represented
-- Whose taste does this data mostly reflect
-
----
-
-## 5. Strengths
-
-Where does your recommender work well
-
-You can think about:
-- Situations where the top results "felt right"
-- Particular user profiles it served well
-- Simplicity or transparency benefits
-
----
-
-## 6. Limitations and Bias
-
-Where does your recommender struggle
-
-Some prompts:
-- Does it ignore some genres or moods
-- Does it treat all users as if they have the same taste shape
-- Is it biased toward high energy or one genre by default
-- How could this be unfair if used in a real product
-
----
-
-## 7. Evaluation
-
-How did you check your system
-
-Examples:
-- You tried multiple user profiles and wrote down whether the results matched your expectations
-- You compared your simulation to what a real app like Spotify or YouTube tends to recommend
-- You wrote tests for your scoring logic
-
-You do not need a numeric metric, but if you used one, explain what it measures.
-
----
-
-## 8. Future Work
-
-If you had more time, how would you improve this recommender
-
-Examples:
-
-- Add support for multiple users and "group vibe" recommendations
-- Balance diversity of songs instead of always picking the closest match
-- Use more features, like tempo ranges or lyric themes
-
----
-
-## 9. Personal Reflection
-
-A few sentences about what you learned:
-
-- What surprised you about how your system behaved
-- How did building this change how you think about real music recommenders
-- Where do you think human judgment still matters, even if the model seems "smart"
-
+```
+Profile: Hip-Hop Focus  |  genre=hip-hop, mood=focused, energy=0.76
+#1  Pulse Check by Metro Grid           Score: 3.99  — genre; mood; energy +0.99
+#2  Block Party Anthem by Kilo Verse    Score: 2.96  — genre; energy +0.96
+#3  Focus Flow by LoRoom                Score: 1.64  — mood; energy +0.64
+#4  Rooftop Lights by Indigo Parade     Score: 1.00  — energy +1.00
+#5  Night Drive Loop by Neon Echo       Score: 0.99  — energy +0.99
+```
